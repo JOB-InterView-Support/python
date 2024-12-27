@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import face  # 새로 추가된 라우터 임포트
+import uvicorn
+from app.routers import FaceRegistration
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
@@ -17,8 +18,11 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(face.router)  # face.py 라우터 추가
-
+app.include_router(FaceRegistration.router, prefix="/face-registration", tags=["Face Registration"])
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the JOBIS FastAPI!"}
+
+# FastAPI 실행
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
