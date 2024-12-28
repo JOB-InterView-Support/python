@@ -16,31 +16,3 @@ def get_oracle_connection():
         return None
 
 
-# USER_FACEID_STATUS 업데이트 함수
-def update_faceid_status(uuid: str):
-    connection = get_oracle_connection()
-    if connection:
-        try:
-            with connection.cursor() as cursor:
-                # UPDATE 쿼리 준비
-                update_query = """
-                    UPDATE USERS
-                    SET USER_FACEID_STATUS = 'Y'
-                    WHERE uuid = :uuid
-                """
-                # 쿼리 실행
-                cursor.execute(update_query, {'uuid': uuid})
-
-                # 변경 사항 커밋
-                connection.commit()
-
-                print(f"USER_FACEID_STATUS가 Y로 업데이트되었습니다. UUID: {uuid}")
-
-        except cx_Oracle.DatabaseError as e:
-            print(f"Error executing update query: {e}")
-
-        finally:
-            # 연결 종료
-            connection.close()
-    else:
-        print("DB 연결 실패")

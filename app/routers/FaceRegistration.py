@@ -1,177 +1,246 @@
-from fastapi import APIRouter, Query
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 import cv2
 import os
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-import math
 import time
-from datetime import datetime
-
-# db_connection에서 update_faceid_status 함수 임포트
-from app.utils.db_connection import update_faceid_status
+from PIL import ImageFont, ImageDraw, Image
+import numpy as np
+from app.utils.db_connection import get_oracle_connection  # DB 연결 모듈 import
 
 router = APIRouter()
 
+# 전역 변수: DB 저장 상태 (기본값 False)
+db_save_status = False
+
 # Haar Cascade 파일 경로
-HAAR_CASCADE_PATH = os.path.join(os.path.dirname(__file__), "../models/haarcascade_frontalface_default.xml")
+cascade_path = os.path.join(os.path.dirname(__file__), "../models/haarcascade_frontalface_default.xml")
+face_cascade = cv2.CascadeClassifier(cascade_path)
 
-# 얼굴 이미지 저장 경로
-IMAGE_SAVE_DIR = "C:/JOBISIMG/FACEID"
+# 윈도우 기본 폰트 경로 설정 (맑은 고딕)
+font_path = "C:/Windows/Fonts/malgun.ttf"  # Windows 기본 폰트인 '맑은 고딕'
+font = ImageFont.truetype(font_path, 24)  # 폰트 크기 설정
 
-# 얼굴 감지 및 스트리밍 함수
-def generate_video_frames(uuid: str):
-    # Haar Cascade 로드
-    face_cascade = cv2.CascadeClassifier(HAAR_CASCADE_PATH)
-    if face_cascade.empty():
-        raise RuntimeError(f"Haar Cascade 파일을 로드할 수 없습니다: {HAAR_CASCADE_PATH}")
+# 얼굴 저장 폴더
+save_folder = "C:/JOBISIMG/FACEID"
+os.makedirs(save_folder, exist_ok=True)  # 폴더가 없으면 생성
 
-    # 카메라 열기
-    cap = cv2.VideoCapture(0)
+
+def is_near_center(red_box, blue_box):
+    """
+    빨간 네모와 파란 네모가 근접했는지 판단
+    """
+    (red_x, red_y, red_w, red_h) = red_box
+    (blue_x, blue_y, blue_w, blue_h) = blue_box
+
+    # 중심 좌표 계산
+    red_center = (red_x + red_w // 2, red_y + red_h // 2)
+    blue_center = (blue_x + blue_w // 2, blue_y + blue_h // 2)
+
+    # 중심 좌표 근접 여부
+    center_distance = np.linalg.norm(np.array(red_center) - np.array(blue_center))
+
+    # 크기 비교 (높이와 너비가 유사해야 함)
+    size_diff = abs(red_w - blue_w) + abs(red_h - blue_h)
+
+    # 근접 기준: 중심 좌표 거리와 크기 차이
+    return center_distance < 25 and size_diff < 25  # 기준을 25로 수정
+
+
+def update_or_insert_faceid(uuid, file_path):
+    """
+    USERS와 FACEID 테이블을 업데이트 또는 삽입
+    """
+    global db_save_status  # 전역 상태 변수
+
+    conn = get_oracle_connection()
+    if conn is None:
+        print("DB 연결 실패")
+        return
+
+    try:
+        cursor = conn.cursor()
+
+        # USERS 테이블에서 USER_FACEID_STATUS 업데이트
+        update_users_query = """
+            UPDATE USERS
+            SET USER_FACEID_STATUS = 'Y'
+            WHERE UUID = :uuid
+        """
+        cursor.execute(update_users_query, {"uuid": uuid})
+
+        # FACEID 테이블에서 데이터 존재 여부 확인
+        check_faceid_query = """
+            SELECT COUNT(*)
+            FROM FACEID
+            WHERE UUID = :uuid
+        """
+        cursor.execute(check_faceid_query, {"uuid": uuid})
+        faceid_exists = cursor.fetchone()[0] > 0
+
+        if faceid_exists:
+            # 데이터가 존재하면 업데이트
+            update_faceid_query = """
+                UPDATE FACEID
+                SET IMAGE_PATH = :image_path,
+                    UPDATE_AT = SYSDATE
+                WHERE UUID = :uuid
+            """
+            cursor.execute(update_faceid_query, {"image_path": file_path, "uuid": uuid})
+        else:
+            # 데이터가 없으면 삽입
+            insert_faceid_query = """
+                INSERT INTO FACEID (USER_FACE_ID, UUID, IMAGE_PATH, CAPTURED_AT, UPDATE_AT)
+                VALUES (:user_face_id, :uuid, :image_path, SYSDATE, SYSDATE)
+            """
+            user_face_id = f"{uuid}FACEID"
+            cursor.execute(insert_faceid_query, {
+                "user_face_id": user_face_id,
+                "uuid": uuid,
+                "image_path": file_path
+            })
+
+        conn.commit()
+        print("DB 작업 완료")
+
+        # DB 저장 상태를 True로 변경
+        db_save_status = True
+    except Exception as e:
+        print(f"DB 작업 중 오류 발생: {e}")
+        conn.rollback()
+        db_save_status = False  # 오류 발생 시 상태 초기화
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def generate_video_stream(uuid):
+    """
+    실시간 카메라 스트림 생성 함수
+    """
+    global db_save_status  # 전역 상태 변수
+
+    cap = cv2.VideoCapture(0)  # 0번 카메라 사용
     if not cap.isOpened():
         raise RuntimeError("카메라를 열 수 없습니다.")
 
-    is_centered = False
-    countdown_start_time = None
-    countdown_value = 3
-    is_image_saved = False
+    count_down = 0  # 카운트다운 초기값
+    last_count_time = time.time()  # 마지막 카운트 업데이트 시간
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        # 원본 프레임을 복사 (네모가 없는 이미지 저장용)
-        original_frame = frame.copy()
+            # 원본 프레임 복사 (저장용)
+            original_frame = frame.copy()
 
-        # 프레임 좌우 반전
-        flipped_frame = cv2.flip(frame, 1)
+            # 좌우 반전
+            frame = cv2.flip(frame, 1)
 
-        # 프레임의 크기 가져오기
-        height, width, _ = flipped_frame.shape
+            # 중앙 빨간 네모
+            height, width, _ = frame.shape
+            center_x, center_y = width // 2, height // 2
+            red_box = (center_x - 140, center_y - 140, 280, 280)  # 빨간 네모
+            top_left = (red_box[0], red_box[1])
+            bottom_right = (red_box[0] + red_box[2], red_box[1] + red_box[3])
 
-        # 중앙의 빨간 네모 정의
-        box_size = 280
-        x_start = (width - box_size) // 2
-        y_start = (height - box_size) // 2
-        x_end = x_start + box_size
-        y_end = y_start + box_size
+            # 얼굴 감지
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-        # 빨간 네모의 중심점 계산
-        red_center_x = (x_start + x_end) // 2
-        red_center_y = (y_start + y_end) // 2
+            # 얼굴 네모 표시 (파란색)
+            for (x, y, w, h) in faces:
+                blue_box = (x, y, w, h)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)  # 파란색 네모
 
-        # 그레이스케일로 변환 (얼굴 감지를 위해)
-        gray_frame = cv2.cvtColor(flipped_frame, cv2.COLOR_BGR2GRAY)
-
-        # 얼굴 감지
-        faces = face_cascade.detectMultiScale(
-            gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
-        )
-
-        is_close = False  # 얼굴이 중앙에 맞는지 확인
-
-        # 감지된 얼굴에 파란색 사각형 그리기
-        for (x, y, w, h) in faces:
-            # 파란 네모의 중심점 계산
-            blue_center_x = x + w // 2
-            blue_center_y = y + h // 2
-
-            # 중심점 거리 계산
-            center_distance = math.sqrt(
-                (red_center_x - blue_center_x) ** 2 + (red_center_y - blue_center_y) ** 2
-            )
-
-            # 빨간 네모와 파란 네모의 변 근접 여부 확인
-            x_close = abs(x_start - x) < 30 or abs(x_end - (x + w)) < 30
-            y_close = abs(y_start - y) < 30 or abs(y_end - (y + h)) < 30
-
-            # 중심점과 네 변 모두 근접하면 초록색으로 변경
-            if center_distance < 30 and x_close and y_close:
-                is_close = True
-
-        # 메시지와 네모 색상 처리
-        if is_close:
-            if not is_centered:
-                is_centered = True
-                countdown_start_time = time.time()  # 카운트다운 시작
-                countdown_value = 3
+                # 빨간 네모와 파란 네모가 근접하면 초록색으로 변경
+                if is_near_center(red_box, blue_box):
+                    cv2.rectangle(frame, top_left, bottom_right, (0, 255, 0), 2)  # 초록색 네모
+                    if count_down == 0:
+                        count_down = 3  # 카운트다운 시작
+                    break
             else:
-                elapsed_time = time.time() - countdown_start_time
-                if elapsed_time >= 1:  # 1초마다 카운트다운 감소
-                    countdown_value -= 1
-                    countdown_start_time = time.time()
+                # 근접하지 않으면 빨간 네모 유지
+                cv2.rectangle(frame, top_left, bottom_right, (0, 0, 255), 2)
 
-                if countdown_value <= 0 and not is_image_saved:
-                    countdown_message = "완료되었습니다!"
-                    color = (0, 255, 0)  # 초록색
+            # 메시지와 카운트다운 표시
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(frame)
+            draw = ImageDraw.Draw(pil_img)
 
-                    # 얼굴 이미지 저장
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                    file_name = f"{uuid}_FACEID_{timestamp}.jpg"
+            if count_down > 0:
+                current_time = time.time()
+                if current_time - last_count_time >= 1:  # 1초 간격으로 카운트 감소
+                    count_down -= 1
+                    last_count_time = current_time
 
-                    # 폴더 생성
-                    os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
+                message = f"얼굴을 유지해주세요 {count_down}"
+                if count_down == 0:
+                    # 얼굴 저장 (원본 프레임 저장)
+                    timestamp = int(time.time())
+                    file_name = f"{save_folder}/{uuid}FACEID{timestamp}.jpg"
+                    cv2.imwrite(file_name, original_frame)  # 원본 프레임 저장
 
-                    # 네모 없는 원본 이미지를 저장
-                    save_path = os.path.join(IMAGE_SAVE_DIR, file_name)
-                    cv2.imwrite(save_path, original_frame)
+                    # DB 업데이트 또는 삽입
+                    update_or_insert_faceid(uuid, file_name)
 
-                    print(f"이미지가 저장되었습니다: {save_path}")
+                    # 카메라 종료 및 스트리밍 중단
+                    cap.release()  # 카메라 릴리즈
+                    db_save_status = True  # DB 저장 완료 상태 업데이트
+                    raise StopIteration  # 스트리밍 종료
+            else:
+                message = "얼굴을 중앙에 맞춰주세요"
 
-                    # Oracle DB에 USER_FACEID_STATUS를 'Y'로 업데이트
-                    update_faceid_status(uuid)
+            text_width, text_height = draw.textbbox((0, 0), message, font=font)[2:]
+            text_position = ((width - text_width) // 2, 10)
+            draw.text(text_position, message, font=font, fill=(255, 255, 255))
 
-                    is_image_saved = True  # 저장 상태 업데이트
+            frame = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
+            # 프레임을 JPG로 인코딩
+            _, buffer = cv2.imencode(".jpg", frame)
+            frame_bytes = buffer.tobytes()
 
-                else:
-                    countdown_message = f"{countdown_value}"
-                    color = (0, 255, 0)  # 초록색
-        else:
-            is_centered = False
-            is_image_saved = False  # 다시 저장 가능하도록 상태 초기화
-            countdown_message = "중앙에 얼굴을 맞춰주세요"
-            color = (0, 0, 255)  # 빨간 네모
-
-        # 얼굴 감지 네모는 파란색으로 표시
-        for (x, y, w, h) in faces:
-            cv2.rectangle(flipped_frame, (x, y), (x + w, y + h), (255, 0, 0), 2)  # 파란색 네모
-
-        # 중앙 네모는 빨간색 또는 초록색으로 표시
-        cv2.rectangle(flipped_frame, (x_start, y_start), (x_end, y_end), color, 2)
-
-        # 한글 메시지 추가 (Pillow로 생성 후 OpenCV로 변환)
-        font = ImageFont.truetype("C:/Windows/Fonts/malgun.ttf", 32)
-        pil_img = Image.fromarray(cv2.cvtColor(flipped_frame, cv2.COLOR_BGR2RGB))
-        draw = ImageDraw.Draw(pil_img)
-
-        # 메시지 출력
-        text_bbox = draw.textbbox((0, 0), countdown_message, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        text_x = (width - text_width) // 2
-        text_y = 50  # 메시지를 화면 상단에 표시
-        draw.text((text_x, text_y), countdown_message, font=font, fill=(255, 255, 255))
-        flipped_frame = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-
-        # 프레임을 JPEG로 인코딩
-        _, buffer = cv2.imencode(".jpg", flipped_frame)
-        frame_bytes = buffer.tobytes()
-
-        # HTTP 스트림 포맷으로 반환
-        yield (b"--frame\r\n"
-               b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
-
-    cap.release()
+            yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+            )
+    except StopIteration:
+        print("스트리밍이 종료되었습니다.")
+    finally:
+        cap.release()
 
 
-@router.get("/stream-video")
-def stream_video(uuid: str = Query(...)):
-    if not uuid:
-        return {"error": "UUID가 제공되지 않았습니다."}
+@router.get("/streamVideo")
+def stream_video(uuid: str):
+    """
+    실시간 카메라 스트림을 반환합니다.
+    """
+    return StreamingResponse(
+        generate_video_stream(uuid),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
 
-    print(f"Received UUID: {uuid}")  # UUID를 로그에 출력
 
-    # 얼굴 감지 스트리밍 시작
-    return StreamingResponse(generate_video_frames(uuid), media_type="multipart/x-mixed-replace; boundary=frame")
+@router.get("/streamVideo")
+def stream_video(uuid: str):
+    """
+    실시간 카메라 스트림을 반환합니다.
+    """
+    return StreamingResponse(
+        generate_video_stream(uuid),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+@router.get("/checkSaveStatus")
+def check_save_status():
+    """
+    DB 저장 상태를 반환하고 초기화합니다.
+    """
+    global db_save_status  # 전역 변수 사용
+    current_status = db_save_status  # 현재 상태를 임시로 저장
+    db_save_status = False  # 상태를 초기화
+    return {"db_save_status": current_status}
+
