@@ -4,11 +4,14 @@ import cv2
 import os
 import time
 from deepface import DeepFace  # DeepFace 사용
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 router = APIRouter()
 
 # 전역 변수 정의
 uuidStatus = False
+best_match_uuid = None
 countdown = 3  # 카운트다운 초기값
 last_update_time = time.time()  # 마지막 카운트다운 업데이트 시간
 image_saved = False  # 이미지 캡처 상태
@@ -80,21 +83,50 @@ def is_near(face_coords, center_coords, tolerance):
 
 
 def compare_images(captured_image_path):
-    """캡처된 이미지와 폴더 내 이미지들을 비교."""
-    global compare_folder
-    matching_files = []
+    """캡처된 이미지와 폴더 내 이미지들을 비교 후 가장 유사도가 높은 UUID 반환."""
+    global compare_folder, uuidStatus, best_match_uuid
+    best_match = None
+    lowest_distance = float('inf')
+
     for file_name in os.listdir(compare_folder):
         file_path = os.path.join(compare_folder, file_name)
         if os.path.isfile(file_path):
             try:
                 # DeepFace를 사용하여 이미지 비교
                 result = DeepFace.verify(captured_image_path, file_path, model_name="VGG-Face", enforce_detection=False)
-                score = result['similarity'] * 100  # 유사도를 백분율로 변환
-                if score >= 70:  # 90점 이상 일치
-                    matching_files.append(file_name)
+                print(f"비교 결과: {result}")  # 비교 결과 출력
+
+                # distance와 threshold를 이용하여 유사도 계산
+                if "distance" in result and "threshold" in result:
+                    distance = result['distance']
+                    threshold = result['threshold']
+
+                    if distance <= threshold:  # 유사하다고 판단
+                        if distance < lowest_distance:  # 더 낮은 distance를 찾으면 갱신
+                            lowest_distance = distance
+                            best_match = {"file_name": file_name, "distance": distance}
+                else:
+                    print(f"'distance' 또는 'threshold' 키가 없습니다. 결과: {result}")
             except Exception as e:
                 print(f"비교 실패: {file_name}, 오류: {e}")
-    return matching_files
+
+    if best_match:
+        # 파일명에서 UUID 추출 (FACEID 앞부분이 UUID)
+        file_name = best_match["file_name"]
+        if "FACEID" in file_name:
+            best_match_uuid = file_name.split("FACEID")[0]  # FACEID 앞부분 추출
+            uuidStatus = True  # 유사한 파일이 발견되면 True로 설정
+            print(f"가장 유사도가 높은 UUID: {best_match_uuid}, 유사도(거리): {best_match['distance']}")
+        else:
+            print(f"파일명에 'FACEID'가 없습니다: {file_name}")
+    else:
+        uuidStatus = False  # 유사한 파일이 없으면 False로 설정
+        best_match_uuid = None
+        print("유사한 파일을 찾지 못했습니다.")
+
+    return best_match_uuid  # 가장 유사한 UUID 반환
+
+
 
 
 def generate_frames():
@@ -186,12 +218,21 @@ def generate_frames():
 
 @router.get("/stream")
 def video_stream():
+    print("facelogin 스트림 시작")
     """카메라 스트림을 클라이언트로 스트리밍."""
     return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
 @router.get("/uuidStatus")
 def get_uuid_status():
-    """uuidStatus 값을 반환."""
-    global uuidStatus
-    return JSONResponse(content={"uuidStatus": uuidStatus})
+    """uuidStatus와 UUID 값을 반환한 후 uuidStatus를 초기화."""
+    global uuidStatus, best_match_uuid
+
+    # 현재 상태를 저장하여 반환
+    response = {"uuidStatus": uuidStatus, "uuid": best_match_uuid}
+
+    # 상태 초기화
+    uuidStatus = False
+    best_match_uuid = None
+
+    return JSONResponse(content=response)
