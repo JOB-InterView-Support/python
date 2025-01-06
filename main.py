@@ -1,8 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.routers import FaceRegistration, FaceImage, FaceLogin, AddQuestionNAnswer
-from app.routers import FaceRegistration, FaceImage, FaceLogin, EmotionsAnalysis
+from app.routers import FaceRegistration, FaceImage, FaceLogin, AddQuestionNAnswer, Posetest, Posetest2
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
@@ -21,7 +20,8 @@ app.include_router(FaceRegistration.router, prefix="/faceRegistration", tags=["F
 app.include_router(FaceImage.router, prefix="/faceId", tags=["Face ID"])  # 새로운 라우터 등록
 app.include_router(FaceLogin.router, prefix="/faceLogin", tags=["Face Login"])  # 새로운 라우터 등록
 app.include_router(AddQuestionNAnswer.router, prefix="/interview", tags=["Interview Questions"])
-app.include_router(EmotionsAnalysis.router, prefix="/emotionsanalysis", tags=["Emotions Analysis"])
+app.include_router(Posetest.router, prefix="/posetest", tags=["Pose test"])
+app.include_router(Posetest2.router, prefix="/posetest2", tags=["Pose test2"])
 
 @app.get("/")
 def read_root():
