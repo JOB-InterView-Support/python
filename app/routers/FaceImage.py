@@ -3,7 +3,7 @@ from pathlib import Path
 import base64
 
 router = APIRouter()
-
+#test
 @router.get("/image/{uuid}")
 async def get_face_id_image(uuid: str):
     face_id_folder = Path("C:/JOBISIMG/FACEID")
