@@ -9,13 +9,11 @@ app = FastAPI()
 # CORS 미들웨어 추가
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # React 개발 서버
-        "http://localhost:8080",  # 다른 서버 주소
-    ],
-    allow_methods=["*"],  # 모든 HTTP 메서드 허용
-    allow_headers=["*"],  # 모든 헤더 허용
+    allow_origins=["http://localhost:3000", "http://localhost:8080", "http://127.0.0.1:8080"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 
 # 라우터 등록
 app.include_router(FaceRegistration.router, prefix="/faceRegistration", tags=["Face Registration"])
