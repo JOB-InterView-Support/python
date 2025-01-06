@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.routers import FaceRegistration, FaceImage, FaceLogin
+from app.routers import FaceRegistration, FaceImage, FaceLogin, EmotionsAnalysis
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
@@ -21,8 +21,7 @@ app.add_middleware(
 app.include_router(FaceRegistration.router, prefix="/faceRegistration", tags=["Face Registration"])
 app.include_router(FaceImage.router, prefix="/faceId", tags=["Face ID"])  # 새로운 라우터 등록
 app.include_router(FaceLogin.router, prefix="/faceLogin", tags=["Face Login"])  # 새로운 라우터 등록
-
-
+app.include_router(EmotionsAnalysis.router, prefix="/emotionsanalysis", tags=["Emotions Analysis"])
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the JOBIS FastAPI!"}
