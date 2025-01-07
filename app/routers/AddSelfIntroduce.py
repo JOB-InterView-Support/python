@@ -66,7 +66,7 @@ def process_self_introduction(content, model="gpt-3.5-turbo"):
         logger.error(f"OpenAI API 호출 실패: {e}")
         return None
 
-@router.put("/insert_self_introduce")
+@router.post("/insert_self_introduce")
 async def insert_self_introduction(request: InsertSelfIntroduceRequest):
     global add_self_intro_status
     add_self_intro_status = "processing"  # 작업 시작
@@ -178,6 +178,7 @@ async def insert_self_introduction(request: InsertSelfIntroduceRequest):
     finally:
         connection.close()
         logger.info("데이터베이스 연결 해제")
+
 
 @router.get("/addSelfIntroduce/status")
 async def get_status():
