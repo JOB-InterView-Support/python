@@ -3,7 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import uvicorn
 import cv2
-from app.routers import FaceRegistration, FaceImage, FaceLogin, AddQuestionNAnswer, AiInterview
+from app.routers import (FaceRegistration,
+                         FaceImage,
+                         FaceLogin,
+                         AddQuestionNAnswer,
+                         AiInterview,
+                         InterviewSave
+                         )
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
@@ -12,6 +18,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:8080", "http://127.0.0.1:8080"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -22,6 +29,9 @@ app.include_router(FaceImage.router, prefix="/faceId", tags=["Face ID"])
 app.include_router(FaceLogin.router, prefix="/faceLogin", tags=["Face Login"])
 app.include_router(AddQuestionNAnswer.router, prefix="/interview", tags=["Interview Questions"])
 app.include_router(AiInterview.router, prefix="/aiInterview", tags=["AI Interview"])  # AiInterview 라우터 추가
+app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["Interview Save"])  # InterviewSave 라우터 추가
+
+
 
 
 @app.get("/")
