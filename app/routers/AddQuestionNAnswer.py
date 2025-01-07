@@ -5,8 +5,10 @@ import openai
 from datetime import datetime
 from dotenv import load_dotenv
 from pydantic import BaseModel
+import pandas as pd
 import os
-import re
+import re  # 오류 원인 해결을 위해 추가
+import uuid
 
 # .env 파일 로드
 load_dotenv()
@@ -69,6 +71,8 @@ async def create_interview_questions(request: AddQuestionsRequest):
     if not connection:
         logger.error("데이터베이스 연결 실패")
         raise HTTPException(status_code=500, detail="데이터베이스 연결 실패")
+
+    csv_path = None
 
     try:
         cursor = connection.cursor()
@@ -138,22 +142,23 @@ async def create_interview_questions(request: AddQuestionsRequest):
             raise HTTPException(status_code=500, detail="OpenAI API 호출 실패")
 
         # 질문-답변 추출
-        qa_pattern = r"(?:\s*\**\s*\d*\s*질문\s*\**\s*\d*\**)?\s*:\s*(.+?)\n(?:\s*\**\s*\d*\s*답변\s*\**\s*\d*\**)?\s*:\s*(.+?)(?=\n(?:\s*\**\s*\d*\s*질문\s*|\Z))"
-
-
+        qa_pattern = r"(?:\s*\**\s*질문\s*\**\s*\d*\s*[:\-]?)\s*(.+?)\s*(?:\n|\r|\r\n)\s*(?:\**답변[:\-]?\s*\**)?\s*:\s*(.+?)(?=\n\s*\**\s*질문|\Z)"
         matches = re.findall(qa_pattern, ai_response, re.DOTALL)
 
-        if not matches:
-            logger.error(f"OpenAI API 응답 데이터가 예상된 형식이 아닙니다: {ai_response}")
-            raise HTTPException(status_code=500, detail="질문과 답변을 추출하지 못했습니다.")
+        logger.info(f"질문-답변 매치 개수: {len(matches)}")
+        if len(matches) != 5:
+            logger.error(f"추출된 질문/답변 수가 예상과 다릅니다: {len(matches)}")
+            raise HTTPException(status_code=500, detail="질문과 답변 추출 중 오류가 발생했습니다.")
 
-        for index, (question, answer) in enumerate(matches, start=1):
-            question = question.strip()
-            answer = answer.strip()
-            timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
+        # CSV 파일 저장
+        data = [{"질문": question.strip(), "답변": answer.strip()} for question, answer in matches]
+        csv_path = f"interview_questions_{intro_no}.csv"
+        pd.DataFrame(data).to_csv(csv_path, index=False, encoding="utf-8-sig")
+        logger.info(f"질문/답변 데이터를 CSV 파일로 저장 완료: {csv_path}")
 
-            iq_no = f"{timestamp}_{intro_no}_{index}"
-            logger.info(f"저장 중인 질문: {question}, 답변: {answer}, ID: {iq_no}, INTERVIEW_ROUND: {RoundId}")
+        # CSV 데이터를 DB로 삽입
+        for row in data:
+            iq_no = f"{uuid.uuid4()}_{intro_no}"
             cursor.execute(
                 """
                 INSERT INTO INTERVIEW_QUESTION_SET (
@@ -174,24 +179,28 @@ async def create_interview_questions(request: AddQuestionsRequest):
                 {
                     "iq_no": iq_no,
                     "intro_no": intro_no,
-                    "question": question,
-                    "answer": answer,
+                    "question": row["질문"],
+                    "answer": row["답변"],
                     "interview_round": RoundId
                 }
             )
 
         connection.commit()
-        logger.info("모든 데이터가 성공적으로 커밋되었습니다.")
+        logger.info("CSV 데이터를 DB에 성공적으로 삽입했습니다.")
+
+        # CSV 파일 삭제
+        if csv_path and os.path.exists(csv_path):
+            os.remove(csv_path)
+            logger.info(f"CSV 파일 삭제 완료: {csv_path}")
 
         addInterviewStatus = "complete"
         logger.info(f"addInterviewStatus 상태가 'complete'로 변경되었습니다.")
 
-        # RoundId를 응답에 포함
         return {
             "status": "success",
             "message": "예상 질문 및 답변이 성공적으로 저장되었습니다.",
             "RoundId": RoundId,
-            "INT_ID" : int_id
+            "INT_ID": int_id
         }
     except Exception as e:
         logger.error(f"요청 처리 중 오류 발생: {e}")
@@ -212,7 +221,3 @@ async def get_status():
         logger.info("addInterviewStatus 상태가 'False'로 초기화되었습니다.")
 
     return {"status": current_status}
-
-
-
-
