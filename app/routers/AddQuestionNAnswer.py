@@ -37,7 +37,7 @@ class AddQuestionsRequest(BaseModel):
 
 
 # OpenAI 프롬프트 처리
-def generate_questions_and_answers(prompt, model="gpt-4-turbo-2024-04-09"):
+def generate_questions_and_answers(prompt, model="gpt-3.5-turbo-1106"):
     try:
         if not openai_api_key:
             logger.error("OpenAI API Key가 설정되지 않았습니다.")
@@ -56,7 +56,11 @@ def generate_questions_and_answers(prompt, model="gpt-4-turbo-2024-04-09"):
     except openai.error.OpenAIError as e:
         logger.error(f"OpenAI API 호출 중 오류 발생: {e}")
         return None
+# OpenAI 응답 클리닝 함수
+def clean_ai_response(content):
 
+    cleaned_content = re.sub(r"^.*과 모범 답안:\s*", "", content, flags=re.DOTALL)
+    return cleaned_content.strip()
 
 @router.post("/addQuestions")
 async def create_interview_questions(request: AddQuestionsRequest):
@@ -133,7 +137,9 @@ async def create_interview_questions(request: AddQuestionsRequest):
         # OpenAI API 호출
         prompt = f"""
         다음은 제가 작성한 자기소개서입니다. 이 자기소개서를 바탕으로 면접에서 나올 가능성이 높은 질문 5개와 해당 질문에 대한 모범 답안을 작성해주세요. 
-        **질문**: '내용' 줄바꿈 **답변**: '내용' 형식으로 해주세요.
+        형식:
+        **질문**: 질문 내용
+        **답변**: 답변 내용
         자기소개서: {intro_contents}
         """
         ai_response = generate_questions_and_answers(prompt)
@@ -141,8 +147,11 @@ async def create_interview_questions(request: AddQuestionsRequest):
             logger.error("OpenAI API 호출 실패")
             raise HTTPException(status_code=500, detail="OpenAI API 호출 실패")
 
+        # 불필요한 텍스트 제거
+        ai_response = clean_ai_response(ai_response)
+
         # 질문-답변 추출
-        qa_pattern = r"(?:\s*\**\s*질문\s*\**\s*\d*\s*[:\-]?)\s*(.+?)\s*(?:\n|\r|\r\n)\s*(?:\**답변[:\-]?\s*\**)?\s*:\s*(.+?)(?=\n\s*\**\s*질문|\Z)"
+        qa_pattern = r"(?:\d+\.\s*\*\*질문\*\*|\*\*질문\s*\d+\*\*|\s*\*\*질문\*\*|\s*질문\s*\d*[:\-]?|\*\*질문\s*\d+\*\*:\s*'[^']*')\s*:\s*(.+?)\s*(?:\*\*답변\*\*|\s*답변[:\-]?|\*\*답변\s*\d+\*\*:\s*'[^']*')\s*:\s*(.+?)(?=\n(?:\d+\.\s*\*\*질문\*\*|\*\*질문\s*\d+\*\*|\s*\*\*질문\*\*|\s*질문\s*\d*[:\-]?|\*\*질문\s*\d+\*\*:\s*'[^']*')|\Z)"
         matches = re.findall(qa_pattern, ai_response, re.DOTALL)
 
         logger.info(f"질문-답변 매치 개수: {len(matches)}")
