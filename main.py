@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import uvicorn
 import cv2
-from app.routers import FaceRegistration, FaceImage, FaceLogin, AddQuestionNAnswer, AiInterview, AddSelfIntroduce, Voice, VideoPosition
+from app.routers import FaceRegistration, FaceImage, FaceLogin, AddQuestionNAnswer, AiInterview, AddSelfIntroduce, Voice, VideoPosition, InterviewSave
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
@@ -25,6 +25,7 @@ app.include_router(AiInterview.router, prefix="/aiInterview", tags=["AI Intervie
 app.include_router(AddSelfIntroduce.router, prefix="/addSelfIntroduce", tags=["Add Self Introduce"])
 app.include_router(Voice.router, prefix="/voice", tags=["Voice"])
 app.include_router(VideoPosition.router, prefix="/videoPosition", tags=["VideoPosition"])
+app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["VideoPosition"])
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the JOBIS FastAPI!"}

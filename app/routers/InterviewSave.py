@@ -334,9 +334,20 @@ common_questions = []
 selected_questions = []  # 랜덤으로 뽑은 질문을 저장하는 변수
 question_set_questions = []  # 추가로 가져온 질문 저장
 
+intro_no = None  # INTERVIEW_REQUEST에서 intro_no 값
+round_id = None  # INTERVIEW_REQUEST에서 round_id 값
+int_id = None  # INTERVIEW_REQUEST에서 int_id 값
+
 @router.post("/record/start")
 async def start_recording(request: InterviewRequest):
     global is_countdown_active, common_questions, selected_questions, question_set_questions
+
+    global intro_no, round_id, int_id  # 새로 추가된 전역 변수 사용 선언
+
+    # 전역 변수 값 설정
+    intro_no = request.intro_no
+    round_id = request.round_id
+    int_id = request.int_id
 
     # 카운트다운 진행 상태 확인
     if not is_countdown_active:
@@ -405,17 +416,21 @@ async def start_recording(request: InterviewRequest):
 interviewState = False  # 인터뷰 진행 상태 플래그
 filename = None  # 저장된 파일 이름
 
+
 @router.get("/state")
 async def get_interview_state():
     """
-    인터뷰 상태 및 파일명을 반환합니다.
+    인터뷰 상태 및 파일명, intro_no, round_id, int_id를 반환합니다.
     """
-    global interviewState, filename
+    global interviewState, filename, intro_no, round_id, int_id
 
     return JSONResponse(
         status_code=200,
         content={
             "interviewState": interviewState,  # 인터뷰 상태 반환
             "filename": filename,  # 저장된 파일명 반환
+            "intro_no": intro_no,  # INTERVIEW_REQUEST에서 받은 intro_no 값
+            "round_id": round_id,  # INTERVIEW_REQUEST에서 받은 round_id 값
+            "int_id": int_id,  # INTERVIEW_REQUEST에서 받은 int_id 값
         },
     )
