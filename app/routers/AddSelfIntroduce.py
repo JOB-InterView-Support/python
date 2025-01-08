@@ -77,9 +77,6 @@ def process_self_introduction(content, model="gpt-3.5-turbo"):
 
 @router.post("/insert_self_introduce")
 async def insert_self_introduction(request: InsertSelfIntroduceRequest):
-    """
-    자기소개서 첨삭 요청 API 엔드포인트.
-    """
     global add_self_intro_status
     add_self_intro_status = "processing"  # 상태를 '처리 중'으로 변경
     intro_no = request.intro_no  # 요청에서 전달된 자기소개서 번호
@@ -112,13 +109,11 @@ async def insert_self_introduction(request: InsertSelfIntroduceRequest):
             add_self_intro_status = "idle"
             raise HTTPException(status_code=404, detail="자기소개서를 찾을 수 없습니다.")
 
-        # 조회 결과에서 데이터 분리
         intro_contents, intro_title, company_name, work_type, certificate = result
 
         # OpenAI API 호출
         processed_content = process_self_introduction(intro_contents)
 
-        # 응답 데이터 처리
         try:
             updated_content = processed_content.split("**첨삭된 자기소개서**:")[1].split("**피드백**:")[0].strip()
             feedback = processed_content.split("**피드백**:")[1].strip()
@@ -127,20 +122,17 @@ async def insert_self_introduction(request: InsertSelfIntroduceRequest):
             add_self_intro_status = "idle"
             raise HTTPException(status_code=500, detail="OpenAI 응답에서 형식을 찾을 수 없습니다.")
 
-        # 제목에 "(첨삭)" 추가
         if "(첨삭)" not in intro_title:
             intro_title += " (첨삭)"
 
-        # 새로운 intro_no 생성
-        current_time = datetime.now().strftime("%Y%m%d%H%M%S")  # 현재 시간 추가
+        current_time = datetime.now().strftime("%Y%m%d%H%M%S")
         new_intro_no = f"{intro_no}_{current_time}"
-        if len(new_intro_no) > 255:  # 255바이트 제한 처리
+        if len(new_intro_no) > 255:
             max_length = 255 - len(current_time) - 1
             new_intro_no = f"{intro_no[:max_length]}_{current_time}"
 
         logger.info(f"새로운 intro_no 생성: {new_intro_no}")
 
-        # DB 삽입 (UUID 포함)
         db_data = {
             "new_intro_no": new_intro_no,
             "intro_title": intro_title,
@@ -154,12 +146,6 @@ async def insert_self_introduction(request: InsertSelfIntroduceRequest):
             "user_uuid": user_uuid,
         }
 
-        # 로깅: DB에 삽입될 데이터
-        logger.info("데이터베이스에 저장될 값:")
-        for key, value in db_data.items():
-            logger.info(f"{key}: {value}")
-
-        # 데이터베이스에 삽입
         cursor.execute(
             """
             INSERT INTO C##SS.SELF_INTRODUCE
@@ -168,18 +154,69 @@ async def insert_self_introduction(request: InsertSelfIntroduceRequest):
             """,
             db_data
         )
-
-        # 커밋하여 변경 사항 저장
         connection.commit()
         logger.info(f"새로운 데이터 생성 성공: new_intro_no={new_intro_no}")
-        add_self_intro_status = "complete"  # 상태를 '완료'로 설정
+        add_self_intro_status = "complete"
         return {"status": "success", "message": "작업이 완료되었습니다.", "new_intro_no": new_intro_no}
 
     except Exception as e:
-        # 예외 발생 시 트랜잭션 롤백
         connection.rollback()
         logger.error(f"데이터베이스 등록 실패: {e}")
         raise HTTPException(status_code=500, detail="데이터베이스 등록 실패")
+    finally:
+        connection.close()
+        logger.info("데이터베이스 연결 해제")
+
+
+@router.get("/intro/detail/{intro_no}")
+async def get_intro_detail(intro_no: str):
+    """
+    특정 intro_no에 해당하는 자기소개서 데이터를 반환합니다.
+    """
+    logger.info(f"/intro/detail/{intro_no} 요청 수신")
+
+    # 데이터베이스 연결
+    connection = get_oracle_connection()
+    if not connection:
+        logger.error("데이터베이스 연결 실패")
+        raise HTTPException(status_code=500, detail="데이터베이스 연결 실패")
+
+    try:
+        cursor = connection.cursor()
+
+        # intro_no로 자기소개서 데이터 조회
+        cursor.execute(
+            """
+            SELECT INTRO_TITLE, INTRO_CONTENTS, APPLICATION_COMPANY_NAME, WORK_TYPE, CERTIFICATE, INTRO_FEEDBACK
+            FROM C##SS.SELF_INTRODUCE
+            WHERE INTRO_NO = :intro_no
+            """,
+            {"intro_no": intro_no}
+        )
+
+        result = cursor.fetchone()
+        if not result:
+            logger.warning(f"intro_no={intro_no}에 해당하는 데이터가 없습니다.")
+            raise HTTPException(status_code=404, detail="자기소개서를 찾을 수 없습니다.")
+
+        # 조회 결과 매핑
+        intro_data = {
+            "introTitle": result[0],
+            "introContents": result[1],
+            "applicationCompanyName": result[2],
+            "workType": result[3],
+            "certificate": result[4],
+            "introFeedback": result[5],
+            "introEditedContents": result[6],
+        }
+
+        logger.info(f"intro_no={intro_no} 데이터 반환 성공")
+        return {"status": "success", "data": intro_data}
+
+    except Exception as e:
+        logger.error(f"/intro/detail/{intro_no} 처리 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"데이터 조회 중 오류 발생: {e}")
+
     finally:
         # 커넥션 종료
         connection.close()
