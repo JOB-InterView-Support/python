@@ -39,12 +39,12 @@ def process_self_introduction(content, model="gpt-3.5-turbo"):
     logger.info("OpenAI API 호출 시작")
     try:
         # OpenAI 입력 제한에 맞게 자기소개서 내용을 1200자로 제한
-        trimmed_content = content[:1200]  # OpenAI 입력 제한 적용
+        trimmed_content = content[:1200]
         logger.info(f"자기소개서 내용 1200자로 제한: {trimmed_content}")
 
         # OpenAI 프롬프트 작성
         prompt = f"""
-        다음은 제가 작성한 자기소개서의 일부입니다. (총 1200자 제한)
+        다음은 제가 작성한 자기소개서의 일부입니다. 첨삭자기소개서 1200자 내로 작성 그리고 최대한 1100자 이상 작성해서 내놓고 피드백은 글자수 제한 1000자 내로 작성
         이 자기소개서를 바탕으로 문맥과 내용을 개선하고 피드백을 작성해.
         그리고 피드백은 자기소개서의 부족한부분을 ~부족하다 ,~필요하다 이런식으로 피드백 작성해
 
@@ -64,7 +64,7 @@ def process_self_introduction(content, model="gpt-3.5-turbo"):
         response = openai.ChatCompletion.create(
             model=model,
             messages=[
-                {"role": "system", "content": "당신은 면접담당이며  문서 첨삭 및 피드백 전문가입니다."},
+                {"role": "system", "content": "당신은 면접담당이며 문서 첨삭 및 피드백 전문가입니다."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -79,8 +79,8 @@ def process_self_introduction(content, model="gpt-3.5-turbo"):
 async def insert_self_introduction(request: InsertSelfIntroduceRequest):
     global add_self_intro_status
     add_self_intro_status = "processing"  # 상태를 '처리 중'으로 변경
-    intro_no = request.intro_no  # 요청에서 전달된 자기소개서 번호
-    user_uuid = request.uuid  # 요청에서 전달된 사용자 UUID
+    intro_no = request.intro_no
+    user_uuid = request.uuid
     logger.info(f"API 요청 수신: intro_no={intro_no}, uuid={user_uuid}")
 
     # 데이터베이스 연결 생성
@@ -114,6 +114,9 @@ async def insert_self_introduction(request: InsertSelfIntroduceRequest):
         # OpenAI API 호출
         processed_content = process_self_introduction(intro_contents)
 
+        # OpenAI API 응답 데이터 로깅
+        logger.info(f"OpenAI API 응답 데이터: {processed_content}")
+
         try:
             updated_content = processed_content.split("**첨삭된 자기소개서**:")[1].split("**피드백**:")[0].strip()
             feedback = processed_content.split("**피드백**:")[1].strip()
@@ -132,6 +135,14 @@ async def insert_self_introduction(request: InsertSelfIntroduceRequest):
             new_intro_no = f"{intro_no[:max_length]}_{current_time}"
 
         logger.info(f"새로운 intro_no 생성: {new_intro_no}")
+
+        # 데이터베이스에 저장할 데이터 로깅
+        logger.info("데이터베이스에 저장할 데이터:")
+        logger.info(f"Updated Content: {updated_content}")
+        logger.info(f"Feedback: {feedback}")
+        logger.info(f"New Intro Title: {intro_title}")
+        logger.info(f"New Intro No: {new_intro_no}")
+        logger.info(f"User UUID: {user_uuid}")
 
         db_data = {
             "new_intro_no": new_intro_no,
@@ -155,7 +166,7 @@ async def insert_self_introduction(request: InsertSelfIntroduceRequest):
             db_data
         )
         connection.commit()
-        logger.info(f"새로운 데이터 생성 성공: new_intro_no={new_intro_no}")
+        logger.info(f"데이터베이스 저장 완료: new_intro_no={new_intro_no}")
         add_self_intro_status = "complete"
         return {"status": "success", "message": "작업이 완료되었습니다.", "new_intro_no": new_intro_no}
 
@@ -164,60 +175,5 @@ async def insert_self_introduction(request: InsertSelfIntroduceRequest):
         logger.error(f"데이터베이스 등록 실패: {e}")
         raise HTTPException(status_code=500, detail="데이터베이스 등록 실패")
     finally:
-        connection.close()
-        logger.info("데이터베이스 연결 해제")
-
-
-@router.get("/intro/detail/{intro_no}")
-async def get_intro_detail(intro_no: str):
-    """
-    특정 intro_no에 해당하는 자기소개서 데이터를 반환합니다.
-    """
-    logger.info(f"/intro/detail/{intro_no} 요청 수신")
-
-    # 데이터베이스 연결
-    connection = get_oracle_connection()
-    if not connection:
-        logger.error("데이터베이스 연결 실패")
-        raise HTTPException(status_code=500, detail="데이터베이스 연결 실패")
-
-    try:
-        cursor = connection.cursor()
-
-        # intro_no로 자기소개서 데이터 조회
-        cursor.execute(
-            """
-            SELECT INTRO_TITLE, INTRO_CONTENTS, APPLICATION_COMPANY_NAME, WORK_TYPE, CERTIFICATE, INTRO_FEEDBACK
-            FROM C##SS.SELF_INTRODUCE
-            WHERE INTRO_NO = :intro_no
-            """,
-            {"intro_no": intro_no}
-        )
-
-        result = cursor.fetchone()
-        if not result:
-            logger.warning(f"intro_no={intro_no}에 해당하는 데이터가 없습니다.")
-            raise HTTPException(status_code=404, detail="자기소개서를 찾을 수 없습니다.")
-
-        # 조회 결과 매핑
-        intro_data = {
-            "introTitle": result[0],
-            "introContents": result[1],
-            "applicationCompanyName": result[2],
-            "workType": result[3],
-            "certificate": result[4],
-            "introFeedback": result[5],
-            "introEditedContents": result[6],
-        }
-
-        logger.info(f"intro_no={intro_no} 데이터 반환 성공")
-        return {"status": "success", "data": intro_data}
-
-    except Exception as e:
-        logger.error(f"/intro/detail/{intro_no} 처리 중 오류 발생: {e}")
-        raise HTTPException(status_code=500, detail=f"데이터 조회 중 오류 발생: {e}")
-
-    finally:
-        # 커넥션 종료
         connection.close()
         logger.info("데이터베이스 연결 해제")

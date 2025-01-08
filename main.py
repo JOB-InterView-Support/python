@@ -35,6 +35,7 @@ app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["Intervi
 app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["interviewSave"])
 app.include_router(VideoAnalyze.router, prefix="/videoAnalyze", tags=["videoAnalyze"])
 app.include_router(AudioAnalyze.router, prefix="/audioAnalyze", tags=["audioAnalyze"])
+app.include_router(InterviewResult.router, prefix="/interviewResult", tags=["InterviewResult"])
 
 @app.get("/")
 def read_root():
