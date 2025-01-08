@@ -277,7 +277,7 @@ class InterviewRequest(BaseModel):
 
 def insert_audio_record(request: InterviewRequest, audio_filename: str):
     """
-    INTERVIEW_AUDIO 테이블에 새로운 레코드를 삽입합니다.
+    INTERVIEW_AUDIO 테이블에 새로운 레 코드를 삽입합니다.
 
     :param request: InterviewRequest 객체
     :param audio_filename: 저장된 MP3 파일 이름

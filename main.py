@@ -5,8 +5,8 @@ import uvicorn
 import cv2
 from app.routers import (FaceRegistration, FaceImage, FaceLogin,
                          AddQuestionNAnswer, AiInterview, AddSelfIntroduce,
-                         Voice, VideoPosition, VideoFeelings, VideoGaze, InterviewSave)
-from app.routers import FaceRegistration, FaceImage, FaceLogin, AddQuestionNAnswer, AiInterview, AddSelfIntroduce, Voice, VideoPosition, InterviewSave, VideoAnalyze, AudioAnalyze
+                         VideoPosition, VideoEmotions, VideoGaze, Voice,
+                         InterviewSave, VideoAnalyze, AudioAnalyze)
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
@@ -28,7 +28,7 @@ app.include_router(AddQuestionNAnswer.router, prefix="/interview", tags=["Interv
 app.include_router(AiInterview.router, prefix="/aiInterview", tags=["AI Interview"])  # AiInterview 라우터 추가
 app.include_router(AddSelfIntroduce.router, prefix="/addSelfIntroduce", tags=["Add Self Introduce"])
 app.include_router(VideoPosition.router, prefix="/videoPosition", tags=["VideoPosition"])
-app.include_router(VideoFeelings.router, prefix="/videoFeelings", tags=["VideoFeelings"])
+app.include_router(VideoEmotions.router, prefix="/videoEmotions", tags=["VideoEmotions"])
 app.include_router(VideoGaze.router, prefix="/videoGaze", tags=["VideoGaze"])
 app.include_router(Voice.router, prefix="/voice", tags=["Voice"])
 app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["InterviewSave"])

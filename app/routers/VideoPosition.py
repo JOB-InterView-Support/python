@@ -2,7 +2,6 @@ from fastapi import FastAPI, APIRouter, HTTPException
 from datetime import datetime
 import cv2
 import mediapipe as mp
-import numpy as np
 import os
 from pydantic import BaseModel
 
@@ -23,7 +22,7 @@ POSE_ANALYSIS_RESULTS = {}
 
 
 @router.post("/record")
-def record_video():
+def pose_save_video():
     """
     원본 비디오 저장 기능
     """
@@ -62,7 +61,7 @@ def record_video():
 
 
 @router.get("/list")
-def list_videos():
+def pose_list_videos():
     """
     저장된 비디오 목록 조회
     """
@@ -78,7 +77,7 @@ def list_videos():
 
 
 @router.post("/analyze")
-def analyze_video(request: VideoRequest):
+def pose_analyze_video(request: VideoRequest):
     """
     저장된 비디오 분석 및 시각화 저장
     """
@@ -149,7 +148,7 @@ def analyze_video(request: VideoRequest):
 
 # DB 연결 예정임
 @router.get("/result")
-def get_analysis_result(video_id: str):
+def pose_analysis_result(video_id: str):
     """
     분석 결과 조회
     """

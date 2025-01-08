@@ -32,7 +32,7 @@ def is_looking_off_screen(eye_center, frame_width, threshold=50):
     return x < threshold or x > frame_width - threshold
 
 @router.post("/record")
-def record_video():
+def gaze_record_video():
     """
     실시간 원본 비디오 저장 및 웹캠 화면 출력
     """
@@ -76,7 +76,7 @@ def record_video():
     return {"message": "Video recorded successfully.", "video_id": video_id, "video_path": video_path}
 
 @router.get("/list")
-def list_videos():
+def gaze_list_videos():
     """
     저장된 원본 비디오 목록 조회
     """
@@ -92,7 +92,7 @@ def list_videos():
     return {"message": "Video list retrieved successfully.", "videos": video_files}
 
 @router.post("/analyze")
-def analyze_video(video_id: str):
+def gaze_analyze_video(video_id: str):
     """
     비디오 분석 및 시각화 저장
     """

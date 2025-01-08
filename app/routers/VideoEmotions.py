@@ -3,7 +3,7 @@ from datetime import datetime
 import cv2
 from deepface import DeepFace
 import os
-from pydantic import BaseModel
+from app.utils.db_connection import get_oracle_connection
 
 app = FastAPI(docs_url="/docs", redoc_url="/redoc")
 router = APIRouter()
@@ -14,10 +14,10 @@ ANALYSIS_DIRECTORY = r"D:\ik\study\프로젝트\JOBIS\analysis_test"
 # 분석 결과 저장
 FEELINGS_ANALYSIS_RESULTS = {}
 
-class VideoRequest(BaseModel):
-    prefix: str
-
 def calculate_emotion_score(emotion_averages):
+    """
+    감정 점수 계산 함수
+    """
     neutral = emotion_averages.get('neutral', 0)
     happy = emotion_averages.get('happy', 0)
     disgust = emotion_averages.get('disgust', 0)
@@ -46,68 +46,53 @@ def calculate_emotion_score(emotion_averages):
         disgust_penalty + angry_penalty + sad_penalty + fear_penalty + surprise_penalty + neutral_penalty
     )
 
-    # 정규화 (10 ~ 100점 기준으로 변경함)
-    min_raw_score = base_score - (30 + 30 + 30 + 20 + 10 + 10)  # 최저 점수
-    max_raw_score = base_score + (50 + 30)  # 최고 점수
+    min_raw_score = base_score - (30 + 30 + 30 + 20 + 10 + 10)
+    max_raw_score = base_score + (50 + 30)
 
     final_score = 10 + ((raw_score - min_raw_score) / (max_raw_score - min_raw_score)) * 90
     return max(10, min(100, final_score))
 
 
-@router.post("/record")
-def save_video():
+def save_emotions_to_db(iv_id, int_id, emotions):
     """
-    실시간 영상 저장 기능
+    감정 데이터를 INTERVIEW_FEELINGS 테이블에 저장
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    video_id = f"recordtest_{timestamp}"
-    video_path = os.path.join(BASE_DIRECTORY, f"{video_id}.mp4")
-    os.makedirs(BASE_DIRECTORY, exist_ok=True)
+    try:
+        connection = get_oracle_connection()
+        cursor = connection.cursor()
 
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        raise HTTPException(status_code=500, detail="Unable to access webcam for recording.")
-
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(video_path, fourcc, 20.0, (frame_width, frame_height))
-
-    start_time = datetime.now()
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        out.write(frame)
-
-        elapsed_time = (datetime.now() - start_time).total_seconds()
-        if elapsed_time >= 20:
-            break
-
-    cap.release()
-    out.release()
-
-    return {"message": "Video saved successfully.", "video_id": video_id, "video_path": video_path}
-
-
-@router.get("/list")
-def list_videos():
-    """
-    저장된 면접영상 (원본) 목록 조회
-    """
-    if not os.path.exists(BASE_DIRECTORY):
-        return {"message": "No videos found.", "videos": []}
-
-    video_files = [
-        f for f in os.listdir(BASE_DIRECTORY) if os.path.isfile(os.path.join(BASE_DIRECTORY, f)) and f.endswith(".mp4")
-    ]
-
-    return {"message": "Video list retrieved successfully.", "videos": video_files}
+        query = """
+        INSERT INTO INTERVIEW_FEELINGS (
+            IVF_ID, IV_ID, IVF_ANGRY, IVF_DISGUST, IVF_FEAR,
+            IVF_HAPPY, IVF_SAD, IVF_SURPRISED, IVF_NEUTRALITY, IVF_SAVE_TIME
+        ) VALUES (
+            :ivf_id, :iv_id, :ivf_angry, :ivf_disgust, :ivf_fear,
+            :ivf_happy, :ivf_sad, :ivf_surprised, :ivf_neutrality, :ivf_save_time
+        )
+        """
+        cursor.execute(query, {
+            "ivf_id": f"{iv_id}_feelings",
+            "iv_id": iv_id,
+            "ivf_angry": emotions.get("angry", 0),
+            "ivf_disgust": emotions.get("disgust", 0),
+            "ivf_fear": emotions.get("fear", 0),
+            "ivf_happy": emotions.get("happy", 0),
+            "ivf_sad": emotions.get("sad", 0),
+            "ivf_surprised": emotions.get("surprise", 0),
+            "ivf_neutrality": emotions.get("neutral", 0),
+            "ivf_save_time": datetime.utcnow(),
+        })
+        connection.commit()
+        print(f"감정 결과 저장 완료: IVF_ID={iv_id}_feelings")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB 저장 실패: {e}")
+    finally:
+        cursor.close()
+        connection.close()
 
 
 @router.post("/analyze")
-def analyze_video(video_id: str):
+def emotions_analyze_video(video_id: str, int_id: str):
     """
     저장된 면접영상 분석 및 감정 분석 결과 평균값 추출
     """
@@ -119,7 +104,7 @@ def analyze_video(video_id: str):
     if not cap.isOpened():
         raise HTTPException(status_code=500, detail="Unable to open video for analysis.")
 
-    output_path = os.path.join(ANALYSIS_DIRECTORY, f"{video_id.replace('recordtest_', '')}_feelings_analyzed.mp4")
+    output_path = os.path.join(ANALYSIS_DIRECTORY, f"{video_id}_analyzed.mp4")
     os.makedirs(ANALYSIS_DIRECTORY, exist_ok=True)
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -169,16 +154,25 @@ def analyze_video(video_id: str):
     averaged_emotions = {emotion: score / total_frames for emotion, score in emotion_results.items()}
     final_score = calculate_emotion_score(averaged_emotions)
 
-    return {
-        "message": "Feelings Analysis completed.",
+    # DB 저장
+    save_emotions_to_db(video_id, int_id, averaged_emotions)
+
+    FEELINGS_ANALYSIS_RESULTS[video_id] = {
         "emotions": averaged_emotions,
         "final_score": final_score,
         "output_video_path": output_path
     }
 
-# DB 연결 예정임
+    return {
+        "message": "Feelings Analysis completed and saved to database.",
+        "emotions": averaged_emotions,
+        "final_score": final_score,
+        "output_video_path": output_path
+    }
+
+
 @router.get("/result")
-def get_analysis_result(video_id: str):
+def emotions_analysis_result(video_id: str):
     """
     분석 결과 조회
     """
