@@ -176,6 +176,28 @@ def generate_frames():
 
         wrapped_message = []  # wrapped_message 초기화
 
+        # 화면 중앙에 빨간색 십자가 그리기
+        frame_width = frame_pil.width
+        frame_height = frame_pil.height
+        cross_size = 10  # 십자가 크기
+        cross_color = (255, 0, 0)  # 빨간색
+
+        # 십자가 중심 좌표 계산
+        center_x = frame_width // 2
+        center_y = frame_height // 2
+
+        # 십자가 그리기
+        draw.line(
+            [(center_x - cross_size, center_y), (center_x + cross_size, center_y)],
+            fill=cross_color,
+            width=2,
+        )
+        draw.line(
+            [(center_x, center_y - cross_size), (center_x, center_y + cross_size)],
+            fill=cross_color,
+            width=2,
+        )
+
         if countdown_stage in ["initial", "question", "answer"]:
             if countdown_stage == "initial":
                 message = "5초 후에 시작합니다!"
@@ -198,14 +220,32 @@ def generate_frames():
                 wrapped_message = textwrap.wrap(message, width=20)
 
             # 메시지 텍스트 그리기
-            text_y = 30  # 텍스트의 상단 기준 Y 좌표
+            text_y = 5  # 텍스트의 상단 기준 Y 좌표
+            padding = 8  # 배경 사각형의 여백
+
             for line in wrapped_message:
-                # 텍스트의 너비를 계산하여 X 좌표 설정 (중앙 정렬)
+                # 텍스트의 너비와 높이를 계산
                 bbox = draw.textbbox((0, 0), line, font=font_common)
                 text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+
+                # 텍스트의 X 좌표와 Y 좌표 계산
                 text_x = (frame_pil.width - text_width) // 2  # 이미지 너비의 중앙에 정렬
+
+                # 배경 사각형 좌표 계산
+                rect_x1 = text_x - padding
+                rect_y1 = text_y - padding
+                rect_x2 = text_x + text_width + padding
+                rect_y2 = text_y + text_height + padding
+
+                # 흰색 배경 사각형 그리기
+                draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], fill=(255, 255, 255))
+
+                # 텍스트 그리기
                 draw.text((text_x, text_y), line, font=font_common, fill=(0, 0, 0))
-                text_y += 40  # 줄 간격
+
+                # 줄 간격 조정
+                text_y += text_height + 2 * padding
 
             # 카운트다운 텍스트 그리기
             countdown_text = str(current_countdown)
@@ -334,9 +374,20 @@ common_questions = []
 selected_questions = []  # 랜덤으로 뽑은 질문을 저장하는 변수
 question_set_questions = []  # 추가로 가져온 질문 저장
 
+intro_no = None  # INTERVIEW_REQUEST에서 intro_no 값
+round_id = None  # INTERVIEW_REQUEST에서 round_id 값
+int_id = None  # INTERVIEW_REQUEST에서 int_id 값
+
 @router.post("/record/start")
 async def start_recording(request: InterviewRequest):
     global is_countdown_active, common_questions, selected_questions, question_set_questions
+
+    global intro_no, round_id, int_id  # 새로 추가된 전역 변수 사용 선언
+
+    # 전역 변수 값 설정
+    intro_no = request.intro_no
+    round_id = request.round_id
+    int_id = request.int_id
 
     # 카운트다운 진행 상태 확인
     if not is_countdown_active:
@@ -405,17 +456,21 @@ async def start_recording(request: InterviewRequest):
 interviewState = False  # 인터뷰 진행 상태 플래그
 filename = None  # 저장된 파일 이름
 
+
 @router.get("/state")
 async def get_interview_state():
     """
-    인터뷰 상태 및 파일명을 반환합니다.
+    인터뷰 상태 및 파일명, intro_no, round_id, int_id를 반환합니다.
     """
-    global interviewState, filename
+    global interviewState, filename, intro_no, round_id, int_id
 
     return JSONResponse(
         status_code=200,
         content={
             "interviewState": interviewState,  # 인터뷰 상태 반환
             "filename": filename,  # 저장된 파일명 반환
+            "intro_no": intro_no,  # INTERVIEW_REQUEST에서 받은 intro_no 값
+            "round_id": round_id,  # INTERVIEW_REQUEST에서 받은 round_id 값
+            "int_id": int_id,  # INTERVIEW_REQUEST에서 받은 int_id 값
         },
     )
