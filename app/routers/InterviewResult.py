@@ -14,10 +14,9 @@ async def compare_self_introduce_interview_with_uuid(uuid: str):
                    CASE 
                        WHEN i.CONPLETE_STATUS = 'Y' THEN 'Y'
                        WHEN i.CONPLETE_STATUS = 'N' THEN 'N'
-                       ELSE 'NOT_IN_INTERVIEW'
                    END AS STATUS
             FROM C##SS.SELF_INTRODUCE si
-            LEFT JOIN C##SS.INTERVIEW i 
+            INNER JOIN C##SS.INTERVIEW i 
             ON si.INTRO_NO = i.INTRO_NO
             WHERE si.INTRO_IS_DELETED = 'N' AND si.UUID = :uuid
         """
@@ -30,7 +29,7 @@ async def compare_self_introduce_interview_with_uuid(uuid: str):
                 "intro_no": row[0],
                 "uuid": row[1],
                 "intro_title": row[2],
-                "status": row[3]  # Y, N, 또는 NOT_IN_INTERVIEW
+                "status": row[3]  # Y 또는 N
             }
             for row in cursor.fetchall()
         ]
