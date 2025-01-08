@@ -102,7 +102,8 @@ async def create_interview_questions(request: AddQuestionsRequest):
                 INT_DATE,
                 INT_D_DATE,
                 INT_IS_DELETED,
-                INTERVIEW_ROUND
+                INTERVIEW_ROUND,
+                CONPLETE_STATUS
             )
             VALUES (
                 :int_id,
@@ -110,7 +111,8 @@ async def create_interview_questions(request: AddQuestionsRequest):
                 :int_date,
                 :int_d_date,
                 :int_is_deleted,
-                :interview_round
+                :interview_round,
+                :complete_status
             )
             """,
             {
@@ -119,7 +121,8 @@ async def create_interview_questions(request: AddQuestionsRequest):
                 "int_date": current_timestamp,
                 "int_d_date": None,
                 "int_is_deleted": 'N',
-                "interview_round": RoundId
+                "interview_round": RoundId,
+                "complete_status": 'N'
             }
         )
         logger.info(f"INTERVIEW 테이블 데이터 삽입 완료: INT_ID={int_id}, INTRO_NO={intro_no}")
