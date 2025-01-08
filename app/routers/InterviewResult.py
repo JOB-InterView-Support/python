@@ -12,15 +12,13 @@ async def compare_self_introduce_interview_with_uuid(uuid: str):
         query = """
             SELECT si.INTRO_NO, si.UUID, si.INTRO_TITLE, 
                    CASE 
-                       WHEN EXISTS (
-                           SELECT 1 
-                           FROM C##SS.INTERVIEW i 
-                           WHERE i.INTRO_NO = si.INTRO_NO
-                             AND i.CONPLETE_STATUS = 'Y'
-                       ) THEN 'Y'
-                       ELSE 'N'
-                   END AS EXISTS_IN_INTERVIEW
+                       WHEN i.CONPLETE_STATUS = 'Y' THEN 'Y'
+                       WHEN i.CONPLETE_STATUS = 'N' THEN 'N'
+                       ELSE 'NOT_IN_INTERVIEW'
+                   END AS STATUS
             FROM C##SS.SELF_INTRODUCE si
+            LEFT JOIN C##SS.INTERVIEW i 
+            ON si.INTRO_NO = i.INTRO_NO
             WHERE si.INTRO_IS_DELETED = 'N' AND si.UUID = :uuid
         """
         print(f"Executing Query: {query}")
@@ -32,7 +30,7 @@ async def compare_self_introduce_interview_with_uuid(uuid: str):
                 "intro_no": row[0],
                 "uuid": row[1],
                 "intro_title": row[2],
-                "exists_in_interview": row[3]
+                "status": row[3]  # Y, N, 또는 NOT_IN_INTERVIEW
             }
             for row in cursor.fetchall()
         ]
@@ -42,15 +40,11 @@ async def compare_self_introduce_interview_with_uuid(uuid: str):
         cursor.close()
         connection.close()
 
-        return result if result else []
+        if not result:
+            return {"message": "해당 UUID에 대한 기록이 없습니다."}
+
+        return result
 
     except Exception as e:
         print(f"DB Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"DB Error: {str(e)}")
-
-
-
-
-
-
-
