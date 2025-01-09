@@ -6,7 +6,7 @@ import cv2
 from app.routers import (FaceRegistration, FaceImage, FaceLogin,
                          AddQuestionNAnswer, AiInterview, AddSelfIntroduce,
                          VideoPosition, VideoEmotions, VideoGaze, Voice,
-                         InterviewSave, VideoAnalyze, AudioAnalyze)
+                         InterviewSave, VideoAnalyze, AudioAnalyze, InterviewResult)
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
