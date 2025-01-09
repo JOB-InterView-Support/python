@@ -6,7 +6,7 @@ import cv2
 from app.routers import (FaceRegistration, FaceImage, FaceLogin,
                          AddQuestionNAnswer, AiInterview, AddSelfIntroduce,
                          VideoPosition, VideoEmotions, VideoGaze, Voice,
-                         InterviewSave, VideoAnalyze, AudioAnalyze, InterviewResult)
+                         InterviewSave, VideoAnalyze, AudioAnalyze, InterviewResult, Clova)
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
@@ -30,13 +30,13 @@ app.include_router(AddSelfIntroduce.router, prefix="/addSelfIntroduce", tags=["A
 app.include_router(VideoPosition.router, prefix="/videoPosition", tags=["VideoPosition"])
 app.include_router(VideoEmotions.router, prefix="/videoEmotions", tags=["VideoEmotions"])
 app.include_router(VideoGaze.router, prefix="/videoGaze", tags=["VideoGaze"])
-app.include_router(Voice.router, prefix="/voice", tags=["Voice"])
 app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["InterviewSave"])
 app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["interviewSave"])
 app.include_router(VideoAnalyze.router, prefix="/videoAnalyze", tags=["videoAnalyze"])
 app.include_router(AudioAnalyze.router, prefix="/audioAnalyze", tags=["audioAnalyze"])
 app.include_router(InterviewResult.router, prefix="/interviewResult", tags=["InterviewResult"])
-
+app.include_router(Voice.router, prefix="/Voice", tags=["Voice"])
+app.include_router(Clova.router, prefix="/Clova", tags=["Clova"])
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the JOBIS FastAPI!"}
