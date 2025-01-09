@@ -44,7 +44,7 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 def record_video(file_path):
     """영상 녹화 함수"""
     global is_recording
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter_fourcc(*"H264")
     out = cv2.VideoWriter(file_path, fourcc, 20.0, (640, 480))
 
     while is_recording:

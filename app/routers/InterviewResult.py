@@ -1,18 +1,36 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, FastAPI
 from app.utils.db_connection import get_oracle_connection
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import logging
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
+import os
 
+# FastAPI 앱 생성
 app = FastAPI()
 
+# 로거 설정
 logger = logging.getLogger("uvicorn.error")
 
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 모든 도메인 허용
+    allow_credentials=True,
+    allow_methods=["*"],  # 모든 HTTP 메서드 허용
+    allow_headers=["*"],  # 모든 헤더 허용
+)
+
+# 라우터 설정
 router = APIRouter()
 
 @router.get("/compare_self_introduce_interview/{uuid}")
 async def compare_self_introduce_interview_with_uuid(uuid: str):
+    """
+    특정 UUID에 대한 자기소개서와 면접 비교 데이터 반환.
+    """
     try:
+        logger.info(f"[INFO] 요청받은 UUID: {uuid}")
         connection = get_oracle_connection()
         cursor = connection.cursor()
 
@@ -28,6 +46,9 @@ async def compare_self_introduce_interview_with_uuid(uuid: str):
             ON si.INTRO_NO = i.INTRO_NO
             WHERE si.INTRO_IS_DELETED = 'N' AND si.UUID = :uuid
         """
+        logger.info(f"[INFO] 실행할 쿼리:\n{query}")
+
+        # 쿼리 실행
         cursor.execute(query, {"uuid": uuid})
         result = [
             {
@@ -40,15 +61,20 @@ async def compare_self_introduce_interview_with_uuid(uuid: str):
             for row in cursor.fetchall()
         ]
 
+        # 연결 종료
         cursor.close()
         connection.close()
 
+        # 결과 확인
         if not result:
+            logger.warning("[WARN] 해당 UUID에 대한 기록이 없습니다.")
             return {"message": "해당 UUID에 대한 기록이 없습니다."}
 
+        logger.info(f"[INFO] 조회 결과: {result}")
         return result
 
     except Exception as e:
+        logger.error(f"[ERROR] DB 처리 중 오류 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=f"DB Error: {str(e)}")
 
 
@@ -58,8 +84,8 @@ async def get_interview_detail(intro_no: str, int_no: str):
     특정 자기소개서 ID(intro_no)와 면접 ID(int_no)에 대한 영상 및 음성 파일 경로를 반환.
     """
     try:
-        print(f"[INFO] 요청받은 intro_no: {intro_no}, int_no: {int_no}")
-        print("[INFO] Oracle 데이터베이스 연결 시도")
+        logger.info(f"[INFO] 요청받은 intro_no: {intro_no}, int_no: {int_no}")
+        logger.info("[INFO] Oracle 데이터베이스 연결 시도")
 
         # Oracle 데이터베이스 연결
         connection = get_oracle_connection()
@@ -83,21 +109,22 @@ async def get_interview_detail(intro_no: str, int_no: str):
                 AND i.INT_ID = :int_no
         """
 
-        print(f"[INFO] 실행할 쿼리:\n{query}")
-        print("[INFO] 쿼리 실행 중...")
+        logger.info(f"[INFO] 실행할 쿼리:\n{query}")
+        logger.info("[INFO] 쿼리 실행 중...")
 
         # 쿼리 실행
         cursor.execute(query, {"intro_no": intro_no, "int_no": int_no})
         row = cursor.fetchone()
 
-        print(f"[INFO] 쿼리 결과: {row}")
+        logger.info(f"[INFO] 쿼리 결과: {row}")
 
-        # 데이터베이스 연결 닫기
+        # 연결 종료
         cursor.close()
         connection.close()
 
-        # 데이터가 없는 경우 처리
+        # 결과 확인
         if not row:
+            logger.warning("[WARN] 해당 자기소개서 ID 또는 면접 ID에 대한 데이터가 없습니다.")
             raise HTTPException(
                 status_code=404, detail="해당 자기소개서 ID 또는 면접 ID에 대한 데이터가 없습니다."
             )
@@ -109,7 +136,7 @@ async def get_interview_detail(intro_no: str, int_no: str):
         }
 
     except Exception as e:
-        print(f"[ERROR] DB 처리 중 오류 발생: {str(e)}")
+        logger.error(f"[ERROR] DB 처리 중 오류 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=f"DB Error: {str(e)}")
 
 
@@ -119,11 +146,18 @@ async def serve_file(file_path: str):
     정적 파일 제공: C:/JOBISIMG 디렉토리에서 파일 제공.
     """
     try:
-        full_path = f"C:/JOBISIMG/{file_path}"
+        full_path = os.path.join("C:/JOBISIMG", file_path)
         logger.info(f"[INFO] 요청받은 파일 경로: {full_path}")
-        return FileResponse(full_path)
+
+        def file_iterator():
+            with open(full_path, "rb") as file:
+                yield from file
+
+        # StreamingResponse를 사용하여 파일 제공
+        return StreamingResponse(file_iterator(), media_type="application/octet-stream")
     except Exception as e:
         logger.error(f"[ERROR] 파일 제공 중 오류 발생: {str(e)}")
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
-
+# 라우터 추가
+app.include_router(router)
