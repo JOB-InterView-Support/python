@@ -75,12 +75,11 @@ def pose_list_videos():
 
     return {"message": "Video list retrieved successfully.", "videos": video_files}
 
+#-------------------------------------------
 
 @router.post("/analyze")
 def pose_analyze_video(request: VideoRequest):
-    """
-    저장된 비디오 분석 및 시각화 저장
-    """
+
     video_id = request.video_id
     video_path = os.path.join(BASE_DIRECTORY, f"{video_id}.mp4")
     if not os.path.exists(video_path):
