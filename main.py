@@ -1,3 +1,4 @@
+import subprocess
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -32,7 +33,6 @@ app.include_router(VideoEmotions.router, prefix="/videoEmotions", tags=["VideoEm
 app.include_router(VideoGaze.router, prefix="/videoGaze", tags=["VideoGaze"])
 app.include_router(Voice.router, prefix="/voice", tags=["Voice"])
 app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["InterviewSave"])
-app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["interviewSave"])
 app.include_router(VideoAnalyze.router, prefix="/videoAnalyze", tags=["videoAnalyze"])
 app.include_router(AudioAnalyze.router, prefix="/audioAnalyze", tags=["audioAnalyze"])
 app.include_router(InterviewResult.router, prefix="/interviewResult", tags=["InterviewResult"])
@@ -42,4 +42,7 @@ def read_root():
     return {"message": "Welcome to the JOBIS FastAPI!"}
 
 if __name__ == "__main__":
+    # http.server 실행
+    subprocess.Popen(["python", "-m", "http.server", "8001", "--directory", "C:/JOBISIMG"])
+    # FastAPI 앱 실행
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
