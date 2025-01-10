@@ -4,13 +4,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import uvicorn
 import cv2
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from app.routers import (FaceRegistration, FaceImage, FaceLogin,
                          AddQuestionNAnswer, AiInterview, AddSelfIntroduce,
                          VideoPosition, VideoEmotions, VideoGaze, Voice,
-                         InterviewSave, VideoAnalyze, AudioAnalyze, InterviewResult, Clova)
+                         InterviewSave, VideoAnalyze, AudioAnalyze, InterviewResult, Clova,
+                         AiInterviewResult, AiInterviewResultDetail)
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
+
+app.mount("/video/static", StaticFiles(directory="C:/JOBISIMG/VIDEO"), name="video")
+app.mount("/audio/static", StaticFiles(directory="C:/JOBISIMG/AUDIO"), name="audio")
+
 
 # CORS 미들웨어 추가
 app.add_middleware(
@@ -37,6 +44,9 @@ app.include_router(AudioAnalyze.router, prefix="/audioAnalyze", tags=["audioAnal
 app.include_router(InterviewResult.router, prefix="/interviewResult", tags=["InterviewResult"])
 app.include_router(Voice.router, prefix="/Voice", tags=["Voice"])
 app.include_router(Clova.router, prefix="/Clova", tags=["Clova"])
+app.include_router(AiInterviewResult.router, prefix="/aiInterviewResult", tags=["aiInterviewResult"])
+app.include_router(AiInterviewResultDetail.router, prefix="/aiInterviewResultDetail", tags=["aiInterviewResultDetail"])
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the JOBIS FastAPI!"}
