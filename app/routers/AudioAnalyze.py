@@ -8,8 +8,6 @@ from pydub import AudioSegment
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-# FastAPI 애플리케이션 및 라우터 초기화
-app = FastAPI(docs_url="/docs", redoc_url="/redoc")
 router = APIRouter()
 
 # 데이터베이스 연결 설정
@@ -22,6 +20,18 @@ BUCKET_NAME = "project_jobis"
 
 # 로깅 설정
 logging.basicConfig(level=logging.DEBUG)
+
+# 디렉토리 확인 및 생성 함수
+def ensure_directory_exists(directory: str):
+    """
+    디렉토리가 존재하지 않으면 생성합니다.
+    :param directory: 디렉토리 경로
+    """
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+        logging.info(f"디렉토리 생성 완료: {directory}")
+    else:
+        logging.info(f"디렉토리 확인 완료: {directory}")
 
 # 부모 테이블에서 AUDIO_ID 조회
 def get_audio_id_from_interview_audio(audio_filename: str, session) -> str:
@@ -47,9 +57,7 @@ def get_audio_id_from_interview_audio(audio_filename: str, session) -> str:
 # MP3를 WAV로 변환
 def convert_mp3_to_wav(mp3_file_path: str, output_folder: str) -> str:
     try:
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
-
+        ensure_directory_exists(output_folder)  # 디렉토리 확인 및 생성
         wav_file_path = os.path.join(output_folder, os.path.basename(mp3_file_path).replace(".mp3", ".wav"))
         audio = AudioSegment.from_file(mp3_file_path, format="mp3")
         audio.export(wav_file_path, format="wav", parameters=["-ar", "16000", "-ac", "1"])
@@ -95,6 +103,7 @@ def generate_stt_id(audio_id: str) -> str:
 # 변환된 텍스트를 DB와 로컬에 저장
 def save_transcription(audio_id: str, transcription: str, text_folder: str, session) -> str:
     try:
+        ensure_directory_exists(text_folder)  # 디렉토리 확인 및 생성
         stt_id = generate_stt_id(audio_id)
         if not os.path.exists(text_folder):
             os.makedirs(text_folder)
@@ -170,8 +179,6 @@ async def analyze_audio(
         # 6. 로컬 파일 삭제
         os.remove(wav_path)
         logging.info(f"WAV 파일 삭제 완료: {wav_path}")
-        os.remove(audio_path)
-        logging.info(f"원본 MP3 파일 삭제 완료: {audio_path}")
 
         # 결과 반환
         return {
@@ -187,6 +194,3 @@ async def analyze_audio(
     except Exception as e:
         logging.error(f"시스템 오류: {str(e)}")
         raise HTTPException(status_code=500, detail="시스템 오류가 발생했습니다.")
-
-# FastAPI 라우터 등록
-app.include_router(router, prefix="/audioAnalyze")
