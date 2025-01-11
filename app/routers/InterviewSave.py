@@ -28,8 +28,8 @@ is_recording = False  # 녹화/녹음 상태 플래그
 
 # 카운트다운 초기 값
 initial_countdown = 5
-question_countdown = 10
-answer_countdown = 10
+question_countdown = 20
+answer_countdown = 40
 
 # 저장 경로
 BASE_DIR = "C:/JOBISIMG"
