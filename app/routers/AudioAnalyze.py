@@ -153,6 +153,7 @@ async def analyze_audio(
         textFolder: str = Form("C:\\JOBISIMG\\TEXT"),
         language_code: str = Form("ko-KR"),
 ):
+    print("오디오 분석 시작")
     try:
         # 1. 파일 경로 확인
         audio_path = os.path.join(audioFolder, audioFilename)

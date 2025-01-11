@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from ..utils.db_connection import get_oracle_connection
+import os
 
 router = APIRouter()
 
@@ -227,6 +228,76 @@ async def get_position(request: Request):
     except Exception as e:
         print("Error fetching position data:", str(e))
         raise HTTPException(status_code=500, detail="Error fetching position data")
+    finally:
+        connection.close()
+
+
+
+@router.post("/getSTT")
+async def get_stt(request: Request):
+    print("STT 데이터 조회 시작")
+    # JSON 데이터 요청을 받음
+    data = await request.json()
+    interview_id = data.get("interviewId")
+
+    # 받은 interviewId를 출력
+    print(f"Received interviewId for STT: {interview_id}")
+
+    # 데이터베이스 연결
+    connection = get_oracle_connection()
+    if not connection:
+        return {"message": "Database connection failed"}
+
+    try:
+        cursor = connection.cursor()
+
+        # INTERVIEW_AUDIO 테이블에서 AUDIO_ID 조회
+        query_audio = """
+            SELECT AUDIO_ID
+            FROM INTERVIEW_AUDIO
+            WHERE INT_ID = :interview_id
+        """
+        cursor.execute(query_audio, {'interview_id': interview_id})
+        audio_result = cursor.fetchone()
+
+        if not audio_result:
+            print("No AUDIO_ID found for the given interviewId")
+            return {"message": "No AUDIO_ID found for the given interviewId"}
+
+        audio_id = audio_result[0]
+        print(f"AUDIO_ID Retrieved: {audio_id}")
+
+        # INTERVIEW_STT 테이블에서 STT_FILE_PATH 조회
+        query_stt = """
+            SELECT STT_FILE_PATH
+            FROM INTERVIEW_STT
+            WHERE AUDIO_ID = :audio_id
+        """
+        cursor.execute(query_stt, {'audio_id': audio_id})
+        stt_result = cursor.fetchone()
+
+        if not stt_result:
+            print("No STT_FILE_PATH found for the given AUDIO_ID")
+            return {"message": "No STT_FILE_PATH found for the given AUDIO_ID"}
+
+        stt_file_path = stt_result[0]
+        print(f"STT_FILE_PATH Retrieved: {stt_file_path}")
+
+        # 텍스트 파일 읽기
+        if not os.path.exists(stt_file_path):
+            print(f"STT file not found at path: {stt_file_path}")
+            return {"message": f"STT file not found at path: {stt_file_path}"}
+
+        with open(stt_file_path, "r", encoding="utf-8") as file:
+            stt_content = file.read()
+
+        print(f"STT File Content:\n{stt_content}")
+
+        # 최종 결과 반환
+        return {"STT_FILE_CONTENT": stt_content}
+    except Exception as e:
+        print(f"Error processing STT file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error processing STT file")
     finally:
         connection.close()
 

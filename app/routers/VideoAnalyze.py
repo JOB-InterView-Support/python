@@ -506,6 +506,7 @@ def save_gaze_analysis_to_db(avg_movement, max_movement, min_movement, int_id):
 @router.post("/analysis")
 async def analyze_video(videoFilename: str = Form(...), introNo: str = Form(...), roundId: str = Form(...),
                         intId: str = Form(...)):
+    print("비디오 분석 시작")
     print(f"Received data -> videoFilename: {videoFilename}, introNo: {introNo}, roundId: {roundId}, intId: {intId}")
 
     video_path = f'C:\\JOBISIMG\\VIDEO\\{videoFilename}'
@@ -528,6 +529,7 @@ async def analyze_video(videoFilename: str = Form(...), introNo: str = Form(...)
     print(f"시선 분석 결과 : Gaze analysis results: {gaze_analysis}")
 
     return {
+        "status": "success",
         "message": "VIDEO 감정, 자세, 시선 분석 완료",
         "emotionAnalysis": emotion_analysis,
         "postureAnalysis": posture_analysis,

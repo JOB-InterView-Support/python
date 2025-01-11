@@ -10,7 +10,7 @@ from app.routers import (FaceRegistration, FaceImage, FaceLogin,
                          AddQuestionNAnswer, AiInterview, AddSelfIntroduce,
                          VideoPosition, VideoEmotions, VideoGaze,
                          InterviewSave, VideoAnalyze, AudioAnalyze, InterviewResult,
-                         AiInterviewResult, AiInterviewResultDetail)
+                         AiInterviewResult, AiInterviewResultDetail, AiInterviewSuccess)
 
 # FastAPI 인스턴스 생성
 app = FastAPI()
@@ -44,6 +44,7 @@ app.include_router(AudioAnalyze.router, prefix="/audioAnalyze", tags=["audioAnal
 app.include_router(InterviewResult.router, prefix="/interviewResult", tags=["InterviewResult"])
 app.include_router(AiInterviewResult.router, prefix="/aiInterviewResult", tags=["aiInterviewResult"])
 app.include_router(AiInterviewResultDetail.router, prefix="/aiInterviewResultDetail", tags=["aiInterviewResultDetail"])
+app.include_router(AiInterviewSuccess.router, prefix="/aiInterviewSuccess", tags=["aiInterviewSuccess"])
 
 @app.get("/")
 def read_root():
