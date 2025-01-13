@@ -8,7 +8,6 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from app.routers import (FaceRegistration, FaceImage, FaceLogin,
                          AddQuestionNAnswer, AiInterview, AddSelfIntroduce,
-                         VideoPosition, VideoEmotions, VideoGaze,
                          InterviewSave, VideoAnalyze, AudioAnalyze, InterviewResult,
                          AiInterviewResult, AiInterviewResultDetail, AiInterviewSuccess)
 
@@ -35,9 +34,6 @@ app.include_router(FaceLogin.router, prefix="/faceLogin", tags=["Face Login"])
 app.include_router(AddQuestionNAnswer.router, prefix="/interview", tags=["Interview Questions"])
 app.include_router(AiInterview.router, prefix="/aiInterview", tags=["AI Interview"])  # AiInterview 라우터 추가
 app.include_router(AddSelfIntroduce.router, prefix="/addSelfIntroduce", tags=["Add Self Introduce"])
-app.include_router(VideoPosition.router, prefix="/videoPosition", tags=["VideoPosition"])
-app.include_router(VideoEmotions.router, prefix="/videoEmotions", tags=["VideoEmotions"])
-app.include_router(VideoGaze.router, prefix="/videoGaze", tags=["VideoGaze"])
 app.include_router(InterviewSave.router, prefix="/interviewSave", tags=["InterviewSave"])
 app.include_router(VideoAnalyze.router, prefix="/videoAnalyze", tags=["videoAnalyze"])
 app.include_router(AudioAnalyze.router, prefix="/audioAnalyze", tags=["audioAnalyze"])
